@@ -1,0 +1,17 @@
+{
+  "name": "phonebook-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for the Phonebook Application",
+  "main": "index.html",
+  "scripts": {
+    "dev": "serve .",
+    "build": "echo 'Building frontend...'"
+  },
+  "keywords": ["vue", "phonebook", "contacts"],
+  "author": "Phonebook App",
+  "license": "MIT",
+  "dependencies": {
+    "serve": "^14.2.0"
+  },
+  "devDependencies": {}
+}

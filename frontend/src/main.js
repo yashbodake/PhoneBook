@@ -1,9 +1,52 @@
-// main.js
+// main.js — Phonebook Pro redesigned UI/UX
 const { createApp } = Vue;
 
-// Define all components directly in this file since we can't use ES6 imports in browser without modules
+// --------------------------------------------------------
+// Toast notification system
+// --------------------------------------------------------
+const ToastContainer = {
+    name: 'ToastContainer',
+    data() {
+        return {
+            toasts: []
+        };
+    },
+    methods: {
+        addToast(message, type = 'info', duration = 4000) {
+            const id = Date.now() + Math.random();
+            const toast = { id, message, type };
+            this.toasts.push(toast);
+            setTimeout(() => {
+                this.removeToast(id);
+            }, duration);
+        },
+        removeToast(id) {
+            this.toasts = this.toasts.filter(t => t.id !== id);
+        }
+    },
+    template: `
+        <div class="toast-container" role="region" aria-live="polite" aria-label="Notifications">
+            <div
+                v-for="toast in toasts"
+                :key="toast.id"
+                class="toast-item"
+                :class="'toast-' + toast.type"
+                role="status"
+            >
+                <i class="bi" :class="{
+                    'bi-check-circle-fill': toast.type === 'success',
+                    'bi-exclamation-circle-fill': toast.type === 'error',
+                    'bi-info-circle-fill': toast.type === 'info'
+                }" aria-hidden="true"></i>
+                <span>{{ toast.message }}</span>
+            </div>
+        </div>
+    `
+};
 
+// --------------------------------------------------------
 // ContactList Component
+// --------------------------------------------------------
 const ContactList = {
     name: 'ContactList',
     props: ['contacts'],
@@ -11,17 +54,21 @@ const ContactList = {
     data() {
         return {
             currentPage: 1,
-            itemsPerPage: 6, // Show 6 contacts per page
-        }
+            itemsPerPage: 9
+        };
     },
     computed: {
         totalPages() {
-            return Math.ceil(this.contacts.length / this.itemsPerPage);
+            return Math.max(1, Math.ceil(this.contacts.length / this.itemsPerPage));
         },
         paginatedContacts() {
             const start = (this.currentPage - 1) * this.itemsPerPage;
-            const end = start + this.itemsPerPage;
-            return this.contacts.slice(start, end);
+            return this.contacts.slice(start, start + this.itemsPerPage);
+        }
+    },
+    watch: {
+        contacts() {
+            this.currentPage = 1;
         }
     },
     mounted() {
@@ -29,159 +76,149 @@ const ContactList = {
     },
     methods: {
         changePage(page) {
-            if (page >= 1 && page <= this.totalPages) {
+            if (page >= 1 && page <= this.totalPages && page !== '...') {
                 this.currentPage = page;
             }
         },
-        nextPage() {
-            if (this.currentPage < this.totalPages) {
-                this.currentPage++;
+        getVisiblePages() {
+            const pages = [];
+            const total = this.totalPages;
+            const current = this.currentPage;
+
+            if (total <= 5) {
+                for (let i = 1; i <= total; i++) pages.push(i);
+                return pages;
             }
+
+            pages.push(1);
+            if (current > 3) pages.push('...');
+            for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
+                pages.push(i);
+            }
+            if (current < total - 2) pages.push('...');
+            if (total > 1) pages.push(total);
+            return pages;
         },
-        prevPage() {
-            if (this.currentPage > 1) {
-                this.currentPage--;
-            }
+        getInitials(name) {
+            if (!name) return '?';
+            return name.charAt(0).toUpperCase();
         }
     },
     template: `
         <div class="contact-list">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="fw-bold" style="color: #2d3748;">My Contacts</h2>
-                <div class="text-muted">
-                    {{ contacts.length }} total contact{{ contacts.length !== 1 ? 's' : '' }}
+            <div class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-2 mb-4">
+                <div>
+                    <h1 class="h3 fw-bold mb-1" style="color: var(--color-foreground);">My Contacts</h1>
+                    <p class="text-muted-custom mb-0">
+                        {{ contacts.length }} contact{{ contacts.length !== 1 ? 's' : '' }}
+                    </p>
                 </div>
+                <button @click="$emit('add-contact')" class="btn-custom btn-primary-custom">
+                    <i class="bi bi-person-plus" aria-hidden="true"></i>
+                    Add Contact
+                </button>
             </div>
 
             <div class="row g-4">
-                <div v-for="contact in paginatedContacts" :key="contact.id" class="col-lg-4 col-md-6">
-                    <div class="card h-100 shadow-sm border-0 rounded-3" style="transition: transform 0.2s ease, box-shadow 0.2s ease; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);">
+                <div
+                    v-for="(contact, index) in paginatedContacts"
+                    :key="contact.id"
+                    class="col-lg-4 col-md-6 stagger-item"
+                    :style="{ animationDelay: (index * 0.05) + 's' }"
+                >
+                    <div
+                        class="card-custom clickable h-100"
+                        @click="$emit('view-contact', contact.id)"
+                        role="button"
+                        tabindex="0"
+                        @keydown.enter="$emit('view-contact', contact.id)"
+                        :aria-label="'View details for ' + contact.name"
+                    >
                         <div class="card-body p-4">
                             <div class="d-flex align-items-center mb-3">
-                                <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center text-white" style="width: 50px; height: 50px; font-size: 1.2rem;">
-                                    {{ contact.name.charAt(0).toUpperCase() }}
+                                <div class="avatar avatar-md me-3">
+                                    {{ getInitials(contact.name) }}
                                 </div>
-                                <div class="ms-3">
-                                    <h5 class="card-title mb-1" style="color: #2d3748;">{{ contact.name }}</h5>
-                                    <small class="text-muted">Contact</small>
-                                </div>
-                            </div>
-                            <div class="mb-2">
-                                <div class="d-flex align-items-center text-muted">
-                                    <i class="bi bi-telephone me-2"></i>
-                                    <span>{{ contact.phone_number }}</span>
+                                <div class="min-w-0">
+                                    <h5 class="fw-bold mb-0 text-truncate" style="color: var(--color-foreground);">{{ contact.name }}</h5>
+                                    <small class="text-muted-custom">Contact</small>
                                 </div>
                             </div>
-                            <div v-if="contact.email" class="mb-2">
-                                <div class="d-flex align-items-center text-muted">
-                                    <i class="bi bi-envelope me-2"></i>
-                                    <span>{{ contact.email }}</span>
-                                </div>
+                            <div class="d-flex align-items-center text-muted-custom mb-2">
+                                <i class="bi bi-telephone me-2" aria-hidden="true"></i>
+                                <span class="text-truncate">{{ contact.phone_number }}</span>
                             </div>
-                            <div v-if="contact.address" class="mb-3">
-                                <div class="d-flex align-items-start text-muted">
-                                    <i class="bi bi-geo-alt me-2 mt-1"></i>
-                                    <span>{{ contact.address }}</span>
-                                </div>
+                            <div v-if="contact.email" class="d-flex align-items-center text-muted-custom mb-2">
+                                <i class="bi bi-envelope me-2" aria-hidden="true"></i>
+                                <span class="text-truncate">{{ contact.email }}</span>
                             </div>
-                            <button @click="$emit('view-contact', contact.id)" class="btn btn-outline-primary w-100" style="border-radius: 8px; font-weight: 500;">
-                                <i class="bi bi-eye me-1"></i> View Details
-                            </button>
+                            <div v-if="contact.address" class="d-flex align-items-start text-muted-custom">
+                                <i class="bi bi-geo-alt me-2 mt-1" aria-hidden="true"></i>
+                                <span class="text-truncate" style="white-space: normal; line-height: 1.4;">{{ contact.address }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Pagination -->
-            <div v-if="contacts.length > itemsPerPage" class="d-flex justify-content-center mt-4 position-relative" style="z-index: 9999; padding-bottom: 20px;">
-                <nav>
-                    <ul class="pagination">
-                        <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                            <button class="page-link" @click="prevPage" :disabled="currentPage === 1" style="border-radius: 8px; border: 1px solid #e2e8f0; color: #4a5568;">Previous</button>
-                        </li>
-
-                        <!-- Show first page, current page(s), and last page with ellipsis as needed -->
-                        <li v-for="pageNum in getVisiblePages()" :key="pageNum" class="page-item" :class="{ active: currentPage === pageNum }">
-                            <button class="page-link" :class="{ 'active': currentPage === pageNum }" @click="changePage(pageNum)" style="border-radius: 8px; border: 1px solid #e2e8f0; color: #4a5568;" :style="currentPage === pageNum ? 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-color: #667eea;' : ''">
-                                {{ pageNum }}
+            <div v-if="contacts.length > itemsPerPage" class="d-flex justify-content-center mt-4">
+                <nav aria-label="Contact pagination">
+                    <ul class="pagination-custom">
+                        <li>
+                            <button
+                                class="page-btn"
+                                @click="changePage(currentPage - 1)"
+                                :disabled="currentPage === 1"
+                                aria-label="Previous page"
+                            >
+                                <i class="bi bi-chevron-left" aria-hidden="true"></i>
                             </button>
                         </li>
-
-                        <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                            <button class="page-link" @click="nextPage" :disabled="currentPage === totalPages" style="border-radius: 8px; border: 1px solid #e2e8f0; color: #4a5568;">Next</button>
+                        <li v-for="(pageNum, idx) in getVisiblePages()" :key="pageNum + '-' + idx">
+                            <button
+                                v-if="pageNum !== '...'"
+                                class="page-btn"
+                                :class="{ active: currentPage === pageNum }"
+                                @click="changePage(pageNum)"
+                                :aria-label="'Page ' + pageNum"
+                                :aria-current="currentPage === pageNum ? 'page' : null"
+                            >
+                                {{ pageNum }}
+                            </button>
+                            <span v-else class="page-ellipsis" aria-hidden="true">…</span>
+                        </li>
+                        <li>
+                            <button
+                                class="page-btn"
+                                @click="changePage(currentPage + 1)"
+                                :disabled="currentPage === totalPages"
+                                aria-label="Next page"
+                            >
+                                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                            </button>
                         </li>
                     </ul>
                 </nav>
             </div>
 
-            <div v-if="contacts.length === 0" class="text-center py-5">
-                <div class="mb-4">
-                    <i class="bi bi-people" style="font-size: 4rem; color: #cbd5e0;"></i>
+            <div v-if="contacts.length === 0" class="empty-state">
+                <div class="empty-state-icon">
+                    <i class="bi bi-people" aria-hidden="true"></i>
                 </div>
-                <h4 class="text-muted mb-2">No contacts yet</h4>
-                <p class="text-muted mb-4">Add your first contact to get started</p>
-                <button @click="$emit('add-contact')" class="btn btn-primary" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; font-weight: 500;">
-                    <i class="bi bi-person-plus me-1"></i> Add Contact
+                <h2 class="h4 fw-bold mb-2" style="color: var(--color-foreground);">No contacts yet</h2>
+                <p class="text-muted-custom mb-4">Add your first contact to get started with Phonebook Pro.</p>
+                <button @click="$emit('add-contact')" class="btn-custom btn-primary-custom">
+                    <i class="bi bi-person-plus" aria-hidden="true"></i>
+                    Add Contact
                 </button>
             </div>
         </div>
-    `,
-    methods: {
-        changePage(page) {
-            if (page >= 1 && page <= this.totalPages) {
-                this.currentPage = page;
-            }
-        },
-        nextPage() {
-            if (this.currentPage < this.totalPages) {
-                this.currentPage++;
-            }
-        },
-        prevPage() {
-            if (this.currentPage > 1) {
-                this.currentPage--;
-            }
-        },
-        getVisiblePages() {
-            // Show a maximum of 5 page buttons: first, ..., current-1, current, current+1, ..., last
-            const pages = [];
-            const totalPages = this.totalPages;
-            const currentPage = this.currentPage;
-
-            if (totalPages <= 5) {
-                // If total pages <= 5, show all pages
-                for (let i = 1; i <= totalPages; i++) {
-                    pages.push(i);
-                }
-            } else {
-                // Always show first page
-                pages.push(1);
-
-                if (currentPage > 3) {
-                    pages.push('...');
-                }
-
-                // Show current page and up to 1 page on each side
-                for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
-                    pages.push(i);
-                }
-
-                if (currentPage < totalPages - 2) {
-                    pages.push('...');
-                }
-
-                // Always show last page
-                if (totalPages > 1) {
-                    pages.push(totalPages);
-                }
-            }
-
-            return pages;
-        }
-    }
+    `
 };
 
+// --------------------------------------------------------
 // ContactDetail Component
+// --------------------------------------------------------
 const ContactDetail = {
     name: 'ContactDetail',
     props: ['contact'],
@@ -189,7 +226,10 @@ const ContactDetail = {
     data() {
         return {
             isEditing: false,
-            editedContact: {}
+            editedContact: {},
+            errors: {},
+            isSaving: false,
+            isDeleting: false
         };
     },
     watch: {
@@ -202,182 +242,218 @@ const ContactDetail = {
             immediate: true
         }
     },
+    computed: {
+        formattedDate() {
+            if (!this.contact || !this.contact.created_at) return 'Not available';
+            return new Date(this.contact.created_at).toLocaleString();
+        }
+    },
     methods: {
         startEdit() {
             this.isEditing = true;
             this.editedContact = { ...this.contact };
+            this.errors = {};
+            this.$nextTick(() => {
+                this.$refs.editName?.focus();
+            });
         },
         cancelEdit() {
             this.isEditing = false;
             this.editedContact = { ...this.contact };
+            this.errors = {};
+        },
+        validate() {
+            const errors = {};
+            if (!this.editedContact.name || !this.editedContact.name.trim()) {
+                errors.name = 'Name is required';
+            }
+            if (!this.editedContact.phone_number || !this.editedContact.phone_number.trim()) {
+                errors.phone_number = 'Phone number is required';
+            }
+            if (this.editedContact.email && !this.isValidEmail(this.editedContact.email)) {
+                errors.email = 'Please enter a valid email address';
+            }
+            this.errors = errors;
+            return Object.keys(errors).length === 0;
+        },
+        isValidEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
         },
         saveEdit() {
-            this.$emit('update-contact', this.contact.id, this.editedContact);
-            this.isEditing = false;
+            if (!this.validate()) return;
+            this.isSaving = true;
+            this.$emit('update-contact', this.contact.id, { ...this.editedContact });
+            // Parent will reset isSaving when done if it calls back; since parent doesn't,
+            // we reset quickly to give feedback. Better handled by parent with callback,
+            // but for this architecture we keep simple.
+            setTimeout(() => {
+                this.isSaving = false;
+                this.isEditing = false;
+            }, 400);
         },
         deleteContact() {
-            if (confirm('Are you sure you want to delete this contact?')) {
+            if (confirm('Are you sure you want to delete this contact? This action cannot be undone.')) {
+                this.isDeleting = true;
                 this.$emit('delete-contact', this.contact.id);
             }
-        }
-    },
-    computed: {
-        formattedDate() {
-            if (!this.contact || !this.contact.created_at) return '';
-            return new Date(this.contact.created_at).toLocaleString();
+        },
+        getInitials(name) {
+            if (!name) return '?';
+            return name.charAt(0).toUpperCase();
         }
     },
     template: `
         <div class="contact-detail">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="fw-bold" style="color: #2d3748;">Contact Details</h2>
-                <button @click="$emit('back-to-list')" class="btn btn-outline-secondary" style="border-radius: 8px; font-weight: 500;">
-                    <i class="bi bi-arrow-left me-1"></i> Back to List
+            <div class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-3 mb-4">
+                <h1 class="h3 fw-bold mb-0" style="color: var(--color-foreground);">Contact Details</h1>
+                <button @click="$emit('back-to-list')" class="btn-custom btn-ghost-custom">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                    Back to List
                 </button>
             </div>
 
-            <div class="card shadow-sm border-0 rounded-3" style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);">
-                <div class="card-body p-4" v-if="!isEditing">
-                    <div class="d-flex align-items-center mb-4">
-                        <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center text-white" style="width: 80px; height: 80px; font-size: 2rem;">
-                            {{ contact.name.charAt(0).toUpperCase() }}
+            <div class="card-custom">
+                <div class="card-body p-4 p-lg-5" v-if="!isEditing">
+                    <div class="d-flex flex-column flex-md-row align-items-center align-items-md-start gap-4 mb-4">
+                        <div class="avatar avatar-lg">
+                            {{ getInitials(contact.name) }}
                         </div>
-                        <div class="ms-4">
-                            <h3 class="mb-1" style="color: #2d3748;">{{ contact.name }}</h3>
-                            <p class="text-muted mb-0">Contact Details</p>
+                        <div class="text-center text-md-start">
+                            <h2 class="h3 fw-bold mb-1" style="color: var(--color-foreground);">{{ contact.name }}</h2>
+                            <p class="text-muted-custom mb-0">Contact Details</p>
                         </div>
                     </div>
 
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center p-3 rounded-2" style="background: #f8fafc; border: 1px solid #e2e8f0;">
-                                <div class="bg-primary bg-opacity-10 rounded-circle p-2 me-3">
-                                    <i class="bi bi-telephone text-primary"></i>
-                                </div>
-                                <div>
-                                    <small class="text-muted">Phone Number</small>
-                                    <div class="fw-medium">{{ contact.phone_number }}</div>
-                                </div>
+                    <div class="info-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-md);">
+                        <div class="info-chip">
+                            <div class="info-chip-icon">
+                                <i class="bi bi-telephone" aria-hidden="true"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="info-chip-label">Phone Number</div>
+                                <div class="info-chip-value">{{ contact.phone_number }}</div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center p-3 rounded-2" style="background: #f8fafc; border: 1px solid #e2e8f0;">
-                                <div class="bg-success bg-opacity-10 rounded-circle p-2 me-3">
-                                    <i class="bi bi-envelope text-success"></i>
-                                </div>
-                                <div>
-                                    <small class="text-muted">Email</small>
-                                    <div class="fw-medium">{{ contact.email || 'Not provided' }}</div>
-                                </div>
+                        <div class="info-chip">
+                            <div class="info-chip-icon">
+                                <i class="bi bi-envelope" aria-hidden="true"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="info-chip-label">Email</div>
+                                <div class="info-chip-value">{{ contact.email || 'Not provided' }}</div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-start p-3 rounded-2" style="background: #f8fafc; border: 1px solid #e2e8f0;">
-                                <div class="bg-warning bg-opacity-10 rounded-circle p-2 me-3">
-                                    <i class="bi bi-geo-alt text-warning"></i>
-                                </div>
-                                <div>
-                                    <small class="text-muted">Address</small>
-                                    <div class="fw-medium">{{ contact.address || 'Not provided' }}</div>
-                                </div>
+                        <div class="info-chip">
+                            <div class="info-chip-icon">
+                                <i class="bi bi-geo-alt" aria-hidden="true"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="info-chip-label">Address</div>
+                                <div class="info-chip-value">{{ contact.address || 'Not provided' }}</div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center p-3 rounded-2" style="background: #f8fafc; border: 1px solid #e2e8f0;">
-                                <div class="bg-info bg-opacity-10 rounded-circle p-2 me-3">
-                                    <i class="bi bi-clock text-info"></i>
-                                </div>
-                                <div>
-                                    <small class="text-muted">Created</small>
-                                    <div class="fw-medium">{{ formattedDate }}</div>
-                                </div>
+                        <div class="info-chip">
+                            <div class="info-chip-icon">
+                                <i class="bi bi-clock" aria-hidden="true"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="info-chip-label">Created</div>
+                                <div class="info-chip-value">{{ formattedDate }}</div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="d-flex gap-2 mt-4">
-                        <button @click="startEdit" class="btn btn-primary flex-fill" style="border-radius: 8px; font-weight: 500; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
-                            <i class="bi bi-pencil me-1"></i> Edit Contact
+                    <div class="d-flex flex-column flex-sm-row gap-3 mt-4">
+                        <button @click="startEdit" class="btn-custom btn-primary-custom flex-fill">
+                            <i class="bi bi-pencil" aria-hidden="true"></i>
+                            Edit Contact
                         </button>
-                        <button @click="deleteContact" class="btn btn-danger flex-fill" style="border-radius: 8px; font-weight: 500;">
-                            <i class="bi bi-trash me-1"></i> Delete
+                        <button @click="deleteContact" class="btn-custom btn-danger-custom flex-fill" :disabled="isDeleting">
+                            <i class="bi bi-trash" aria-hidden="true"></i>
+                            <span v-if="isDeleting" class="spinner me-2"></span>
+                            {{ isDeleting ? 'Deleting...' : 'Delete' }}
                         </button>
                     </div>
                 </div>
 
-                <div class="card-body p-4" v-else>
-                    <h4 class="mb-4 fw-bold" style="color: #2d3748;">Edit Contact</h4>
-                    <form @submit.prevent="saveEdit">
+                <div class="card-body p-4 p-lg-5" v-else>
+                    <h2 class="h4 fw-bold mb-4" style="color: var(--color-foreground);">Edit Contact</h2>
+                    <form @submit.prevent="saveEdit" novalidate>
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label for="editName" class="form-label fw-medium mb-2">Name</label>
-                                <div class="input-group">
-                                    <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0;">
-                                        <i class="bi bi-person"></i>
-                                    </span>
+                                <label for="editName" class="input-label">Full Name *</label>
+                                <div class="input-group-custom">
+                                    <i class="bi bi-person input-icon" aria-hidden="true"></i>
                                     <input
+                                        ref="editName"
                                         type="text"
-                                        class="form-control border-0 ps-0"
                                         id="editName"
                                         v-model="editedContact.name"
-                                        required
-                                        style="border-left: 1px solid #e2e8f0 !important;"
+                                        class="input-custom"
+                                        :class="{ error: errors.name }"
+                                        aria-required="true"
+                                        :aria-invalid="!!errors.name"
+                                        :aria-describedby="errors.name ? 'editName-error' : null"
                                     >
                                 </div>
+                                <div v-if="errors.name" id="editName-error" class="input-error" role="alert">{{ errors.name }}</div>
                             </div>
                             <div class="col-md-6">
-                                <label for="editPhone" class="form-label fw-medium mb-2">Phone Number</label>
-                                <div class="input-group">
-                                    <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0;">
-                                        <i class="bi bi-telephone"></i>
-                                    </span>
+                                <label for="editPhone" class="input-label">Phone Number *</label>
+                                <div class="input-group-custom">
+                                    <i class="bi bi-telephone input-icon" aria-hidden="true"></i>
                                     <input
                                         type="text"
-                                        class="form-control border-0 ps-0"
                                         id="editPhone"
                                         v-model="editedContact.phone_number"
-                                        required
-                                        style="border-left: 1px solid #e2e8f0 !important;"
+                                        class="input-custom"
+                                        :class="{ error: errors.phone_number }"
+                                        aria-required="true"
+                                        :aria-invalid="!!errors.phone_number"
+                                        :aria-describedby="errors.phone_number ? 'editPhone-error' : null"
                                     >
                                 </div>
+                                <div v-if="errors.phone_number" id="editPhone-error" class="input-error" role="alert">{{ errors.phone_number }}</div>
                             </div>
                             <div class="col-md-6">
-                                <label for="editEmail" class="form-label fw-medium mb-2">Email</label>
-                                <div class="input-group">
-                                    <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0;">
-                                        <i class="bi bi-envelope"></i>
-                                    </span>
+                                <label for="editEmail" class="input-label">Email Address</label>
+                                <div class="input-group-custom">
+                                    <i class="bi bi-envelope input-icon" aria-hidden="true"></i>
                                     <input
                                         type="email"
-                                        class="form-control border-0 ps-0"
                                         id="editEmail"
                                         v-model="editedContact.email"
-                                        style="border-left: 1px solid #e2e8f0 !important;"
+                                        class="input-custom"
+                                        :class="{ error: errors.email }"
+                                        :aria-invalid="!!errors.email"
+                                        :aria-describedby="errors.email ? 'editEmail-error' : null"
                                     >
                                 </div>
+                                <div v-if="errors.email" id="editEmail-error" class="input-error" role="alert">{{ errors.email }}</div>
                             </div>
                             <div class="col-md-6">
-                                <label for="editAddress" class="form-label fw-medium mb-2">Address</label>
-                                <div class="input-group">
-                                    <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0;">
-                                        <i class="bi bi-geo-alt"></i>
-                                    </span>
+                                <label for="editAddress" class="input-label">Address</label>
+                                <div class="input-group-custom">
+                                    <i class="bi bi-geo-alt input-icon" aria-hidden="true"></i>
                                     <textarea
-                                        class="form-control border-0 ps-0"
                                         id="editAddress"
                                         v-model="editedContact.address"
-                                        rows="1"
-                                        style="border-left: 1px solid #e2e8f0 !important; resize: none; height: auto;"
+                                        class="input-custom"
+                                        rows="2"
+                                        style="resize: vertical; padding-top: 0.75rem;"
                                     ></textarea>
                                 </div>
                             </div>
                         </div>
-                        <div class="d-flex gap-2 mt-4">
-                            <button type="submit" class="btn btn-success flex-fill" style="border-radius: 8px; font-weight: 500; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); border: none;">
-                                <i class="bi bi-save me-1"></i> Save Changes
+                        <div class="d-flex flex-column flex-sm-row gap-3 mt-4">
+                            <button type="submit" class="btn-custom btn-primary-custom flex-fill" :disabled="isSaving">
+                                <span v-if="isSaving" class="spinner me-2"></span>
+                                <i v-else class="bi bi-check-lg" aria-hidden="true"></i>
+                                {{ isSaving ? 'Saving...' : 'Save Changes' }}
                             </button>
-                            <button type="button" @click="cancelEdit" class="btn btn-secondary flex-fill" style="border-radius: 8px; font-weight: 500;">
-                                <i class="bi bi-x me-1"></i> Cancel
+                            <button type="button" @click="cancelEdit" class="btn-custom btn-ghost-custom flex-fill">
+                                <i class="bi bi-x-lg" aria-hidden="true"></i>
+                                Cancel
                             </button>
                         </div>
                     </form>
@@ -387,7 +463,9 @@ const ContactDetail = {
     `
 };
 
+// --------------------------------------------------------
 // CreateContact Component
+// --------------------------------------------------------
 const CreateContact = {
     name: 'CreateContact',
     emits: ['create-contact', 'cancel'],
@@ -398,106 +476,137 @@ const CreateContact = {
                 phone_number: '',
                 email: '',
                 address: ''
-            }
+            },
+            errors: {},
+            isSubmitting: false
         };
     },
+    mounted() {
+        this.$refs.nameInput?.focus();
+    },
     methods: {
-        submitForm() {
-            // Basic validation
-            if (!this.contact.name || !this.contact.phone_number) {
-                alert('Name and phone number are required');
-                return;
+        validate() {
+            const errors = {};
+            if (!this.contact.name || !this.contact.name.trim()) {
+                errors.name = 'Name is required';
             }
-
+            if (!this.contact.phone_number || !this.contact.phone_number.trim()) {
+                errors.phone_number = 'Phone number is required';
+            }
+            if (this.contact.email && !this.isValidEmail(this.contact.email)) {
+                errors.email = 'Please enter a valid email address';
+            }
+            this.errors = errors;
+            return Object.keys(errors).length === 0;
+        },
+        isValidEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        },
+        submitForm() {
+            if (!this.validate()) return;
+            this.isSubmitting = true;
             this.$emit('create-contact', { ...this.contact });
+            // Parent handles actual loading state; reset after brief delay for feedback
+            setTimeout(() => {
+                this.isSubmitting = false;
+                this.contact = { name: '', phone_number: '', email: '', address: '' };
+            }, 400);
         }
     },
     template: `
         <div class="create-contact">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3 class="fw-bold" style="color: #2d3748;">Add New Contact</h3>
-                <button @click="$emit('cancel')" class="btn btn-outline-secondary btn-sm" style="border-radius: 8px; font-weight: 500; font-size: 0.85rem;">
-                    <i class="bi bi-x me-1"></i> Cancel
+            <div class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-3 mb-4">
+                <div>
+                    <h1 class="h3 fw-bold mb-1" style="color: var(--color-foreground);">Add New Contact</h1>
+                    <p class="text-muted-custom mb-0">Create a new contact in your phonebook.</p>
+                </div>
+                <button @click="$emit('cancel')" class="btn-custom btn-ghost-custom">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                    Cancel
                 </button>
             </div>
 
-            <div class="card shadow-sm border-0 rounded-3" style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);">
-                <div class="card-body p-3">
-                    <form @submit.prevent="submitForm">
+            <div class="card-custom">
+                <div class="card-body p-4 p-lg-5">
+                    <form @submit.prevent="submitForm" novalidate>
                         <div class="row g-3">
                             <div class="col-12">
-                                <label for="name" class="form-label fw-medium mb-1" style="font-size: 0.9rem;">Full Name *</label>
-                                <div class="input-group">
-                                    <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0; font-size: 0.8rem;">
-                                        <i class="bi bi-person"></i>
-                                    </span>
+                                <label for="name" class="input-label">Full Name *</label>
+                                <div class="input-group-custom">
+                                    <i class="bi bi-person input-icon" aria-hidden="true"></i>
                                     <input
+                                        ref="nameInput"
                                         type="text"
-                                        class="form-control border-0 ps-0"
                                         id="name"
                                         v-model="contact.name"
-                                        required
-                                        placeholder="Enter full name"
-                                        style="border-left: 1px solid #e2e8f0 !important; font-size: 0.9rem;"
+                                        class="input-custom"
+                                        :class="{ error: errors.name }"
+                                        placeholder="John Doe"
+                                        aria-required="true"
+                                        :aria-invalid="!!errors.name"
+                                        :aria-describedby="errors.name ? 'name-error' : null"
                                     >
                                 </div>
+                                <div v-if="errors.name" id="name-error" class="input-error" role="alert">{{ errors.name }}</div>
                             </div>
                             <div class="col-12">
-                                <label for="phone" class="form-label fw-medium mb-1" style="font-size: 0.9rem;">Phone Number *</label>
-                                <div class="input-group">
-                                    <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0; font-size: 0.8rem;">
-                                        <i class="bi bi-telephone"></i>
-                                    </span>
+                                <label for="phone" class="input-label">Phone Number *</label>
+                                <div class="input-group-custom">
+                                    <i class="bi bi-telephone input-icon" aria-hidden="true"></i>
                                     <input
                                         type="text"
-                                        class="form-control border-0 ps-0"
                                         id="phone"
                                         v-model="contact.phone_number"
-                                        required
-                                        placeholder="+1234567890"
-                                        style="border-left: 1px solid #e2e8f0 !important; font-size: 0.9rem;"
+                                        class="input-custom"
+                                        :class="{ error: errors.phone_number }"
+                                        placeholder="+1 (555) 123-4567"
+                                        aria-required="true"
+                                        :aria-invalid="!!errors.phone_number"
+                                        :aria-describedby="errors.phone_number ? 'phone-error' : null"
                                     >
                                 </div>
+                                <div v-if="errors.phone_number" id="phone-error" class="input-error" role="alert">{{ errors.phone_number }}</div>
                             </div>
                             <div class="col-md-6">
-                                <label for="email" class="form-label fw-medium mb-1" style="font-size: 0.9rem;">Email Address</label>
-                                <div class="input-group">
-                                    <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0; font-size: 0.8rem;">
-                                        <i class="bi bi-envelope"></i>
-                                    </span>
+                                <label for="email" class="input-label">Email Address</label>
+                                <div class="input-group-custom">
+                                    <i class="bi bi-envelope input-icon" aria-hidden="true"></i>
                                     <input
                                         type="email"
-                                        class="form-control border-0 ps-0"
                                         id="email"
                                         v-model="contact.email"
-                                        placeholder="user@example.com"
-                                        style="border-left: 1px solid #e2e8f0 !important; font-size: 0.9rem;"
+                                        class="input-custom"
+                                        :class="{ error: errors.email }"
+                                        placeholder="john@example.com"
+                                        :aria-invalid="!!errors.email"
+                                        :aria-describedby="errors.email ? 'email-error' : null"
                                     >
                                 </div>
+                                <div v-if="errors.email" id="email-error" class="input-error" role="alert">{{ errors.email }}</div>
                             </div>
                             <div class="col-md-6">
-                                <label for="address" class="form-label fw-medium mb-1" style="font-size: 0.9rem;">Address</label>
-                                <div class="input-group">
-                                    <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0; font-size: 0.8rem;">
-                                        <i class="bi bi-geo-alt"></i>
-                                    </span>
+                                <label for="address" class="input-label">Address</label>
+                                <div class="input-group-custom">
+                                    <i class="bi bi-geo-alt input-icon" aria-hidden="true"></i>
                                     <input
                                         type="text"
-                                        class="form-control border-0 ps-0"
                                         id="address"
                                         v-model="contact.address"
-                                        placeholder="Enter address"
-                                        style="border-left: 1px solid #e2e8f0 !important; font-size: 0.9rem;"
+                                        class="input-custom"
+                                        placeholder="123 Main Street, City"
                                     >
                                 </div>
                             </div>
                         </div>
-                        <div class="d-flex gap-2 mt-3">
-                            <button type="submit" class="btn btn-primary flex-fill btn-sm" style="border-radius: 8px; font-weight: 500; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; padding: 8px 0; font-size: 0.9rem;">
-                                <i class="bi bi-plus-circle me-1"></i> Add Contact
+                        <div class="d-flex flex-column flex-sm-row gap-3 mt-4">
+                            <button type="submit" class="btn-custom btn-primary-custom flex-fill" :disabled="isSubmitting">
+                                <span v-if="isSubmitting" class="spinner me-2"></span>
+                                <i v-else class="bi bi-plus-lg" aria-hidden="true"></i>
+                                {{ isSubmitting ? 'Adding...' : 'Add Contact' }}
                             </button>
-                            <button type="button" @click="$emit('cancel')" class="btn btn-outline-secondary flex-fill btn-sm" style="border-radius: 8px; font-weight: 500; font-size: 0.9rem;">
-                                <i class="bi bi-x me-1"></i> Cancel
+                            <button type="button" @click="$emit('cancel')" class="btn-custom btn-ghost-custom flex-fill">
+                                <i class="bi bi-x-lg" aria-hidden="true"></i>
+                                Cancel
                             </button>
                         </div>
                     </form>
@@ -507,7 +616,9 @@ const CreateContact = {
     `
 };
 
+// --------------------------------------------------------
 // Login Component
+// --------------------------------------------------------
 const Login = {
     name: 'Login',
     emits: ['login', 'navigate-to-register'],
@@ -516,88 +627,96 @@ const Login = {
             credentials: {
                 username: '',
                 password: ''
-            }
+            },
+            errors: {},
+            isLoading: false
         };
     },
+    mounted() {
+        this.$refs.usernameInput?.focus();
+    },
+    methods: {
+        validate() {
+            const errors = {};
+            if (!this.credentials.username.trim()) errors.username = 'Username is required';
+            if (!this.credentials.password) errors.password = 'Password is required';
+            this.errors = errors;
+            return Object.keys(errors).length === 0;
+        },
+        submitForm() {
+            if (!this.validate()) return;
+            this.isLoading = true;
+            this.$emit('login', { ...this.credentials });
+        },
+        resetLoading() {
+            this.isLoading = false;
+        }
+    },
     template: `
-        <div class="login position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh;">
-            <div class="container-fluid px-3">
-                <div class="row justify-content-center align-items-center" style="min-height: 100vh;">
-                    <div class="col-xl-4 col-lg-5 col-md-6 col-sm-8">
-                        <div class="card shadow-lg border-0 rounded-3" style="backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.95);">
-                            <div class="card-body p-3 p-md-4">
-                                <div class="text-center mb-3">
-                                    <div class="mb-2">
-                                        <i class="bi bi-people-circle" style="font-size: 2.5rem; color: #667eea;"></i>
-                                    </div>
-                                    <h3 class="fw-bold mb-1" style="color: #2d3748;">Welcome</h3>
-                                    <p class="text-muted mb-0" style="font-size: 0.9rem;">Sign in to your account</p>
-                                </div>
-                                <form @submit.prevent="submitForm">
-                                    <div class="mb-3">
-                                        <label for="loginUsername" class="form-label fw-medium mb-1" style="font-size: 0.9rem;">Username</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0;">
-                                                <i class="bi bi-person" style="font-size: 0.9rem;"></i>
-                                            </span>
-                                            <input
-                                                type="text"
-                                                class="form-control border-0 ps-0"
-                                                id="loginUsername"
-                                                v-model="credentials.username"
-                                                required
-                                                style="border-left: 1px solid #e2e8f0 !important;"
-                                            >
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="loginPassword" class="form-label fw-medium mb-1" style="font-size: 0.9rem;">Password</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0;">
-                                                <i class="bi bi-lock" style="font-size: 0.9rem;"></i>
-                                            </span>
-                                            <input
-                                                type="password"
-                                                class="form-control border-0 ps-0"
-                                                id="loginPassword"
-                                                v-model="credentials.password"
-                                                required
-                                                style="border-left: 1px solid #e2e8f0 !important;"
-                                            >
-                                        </div>
-                                    </div>
-                                    <div class="d-grid mb-3">
-                                        <button type="submit" class="btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; padding: 10px 0; font-weight: 500; transition: all 0.3s ease; font-size: 0.95rem;">
-                                            Sign In
-                                        </button>
-                                    </div>
-                                </form>
-                                <div class="text-center">
-                                    <p class="mb-0 text-muted" style="font-size: 0.85rem;">Don't have an account?
-                                        <a href="#" @click="$emit('navigate-to-register')" class="fw-bold" style="color: #667eea; text-decoration: none; font-size: 0.85rem;">Sign up</a>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+        <div class="auth-page">
+            <div class="auth-card">
+                <div class="text-center">
+                    <div class="auth-logo">
+                        <i class="bi bi-people" aria-hidden="true"></i>
                     </div>
+                    <h2 class="h3 fw-bold mb-1" style="color: var(--color-foreground);">Welcome back</h2>
+                    <p class="text-muted-custom mb-4">Sign in to your Phonebook Pro account</p>
+                </div>
+                <form @submit.prevent="submitForm" novalidate>
+                    <div class="mb-3">
+                        <label for="loginUsername" class="input-label">Username</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-person input-icon" aria-hidden="true"></i>
+                            <input
+                                ref="usernameInput"
+                                type="text"
+                                id="loginUsername"
+                                v-model="credentials.username"
+                                class="input-custom"
+                                :class="{ error: errors.username }"
+                                autocomplete="username"
+                                :aria-invalid="!!errors.username"
+                                :aria-describedby="errors.username ? 'loginUsername-error' : null"
+                            >
+                        </div>
+                        <div v-if="errors.username" id="loginUsername-error" class="input-error" role="alert">{{ errors.username }}</div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="loginPassword" class="input-label">Password</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-lock input-icon" aria-hidden="true"></i>
+                            <input
+                                type="password"
+                                id="loginPassword"
+                                v-model="credentials.password"
+                                class="input-custom"
+                                :class="{ error: errors.password }"
+                                autocomplete="current-password"
+                                :aria-invalid="!!errors.password"
+                                :aria-describedby="errors.password ? 'loginPassword-error' : null"
+                            >
+                        </div>
+                        <div v-if="errors.password" id="loginPassword-error" class="input-error" role="alert">{{ errors.password }}</div>
+                    </div>
+                    <button type="submit" class="btn-custom btn-primary-custom w-100" :disabled="isLoading">
+                        <span v-if="isLoading" class="spinner me-2"></span>
+                        {{ isLoading ? 'Signing in...' : 'Sign In' }}
+                    </button>
+                </form>
+                <div class="text-center mt-4">
+                    <p class="mb-0 text-muted-custom" style="font-size: 0.9rem;">
+                        Don't have an account?
+                        <a href="#" @click.prevent="$emit('navigate-to-register')" class="fw-bold">Sign up</a>
+                    </p>
                 </div>
             </div>
         </div>
-    `,
-    methods: {
-        submitForm() {
-            // Basic validation
-            if (!this.credentials.username || !this.credentials.password) {
-                alert('Please fill in all fields');
-                return;
-            }
-
-            this.$emit('login', { ...this.credentials });
-        }
-    }
+    `
 };
 
+// --------------------------------------------------------
 // Register Component
+// --------------------------------------------------------
 const Register = {
     name: 'Register',
     emits: ['register', 'navigate-to-login'],
@@ -608,164 +727,183 @@ const Register = {
                 email: '',
                 password: '',
                 confirmPassword: ''
-            }
+            },
+            errors: {},
+            isLoading: false
         };
     },
-    template: `
-        <div class="register position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); min-height: 100vh;">
-            <div class="container-fluid px-3">
-                <div class="row justify-content-center align-items-center" style="min-height: 100vh;">
-                    <div class="col-xl-4 col-lg-5 col-md-6 col-sm-8">
-                        <div class="card shadow-lg border-0 rounded-3" style="backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.95);">
-                            <div class="card-body p-3 p-md-4">
-                                <div class="text-center mb-3">
-                                    <div class="mb-2">
-                                        <i class="bi bi-person-plus" style="font-size: 2.5rem; color: #f093fb;"></i>
-                                    </div>
-                                    <h3 class="fw-bold mb-1" style="color: #2d3748;">Create Account</h3>
-                                    <p class="text-muted mb-0" style="font-size: 0.9rem;">Join our community today</p>
-                                </div>
-                                <form @submit.prevent="submitForm">
-                                    <div class="mb-3">
-                                        <label for="registerUsername" class="form-label fw-medium mb-1" style="font-size: 0.9rem;">Username</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0;">
-                                                <i class="bi bi-person" style="font-size: 0.9rem;"></i>
-                                            </span>
-                                            <input
-                                                type="text"
-                                                class="form-control border-0 ps-0"
-                                                id="registerUsername"
-                                                v-model="credentials.username"
-                                                required
-                                                minlength="3"
-                                                style="border-left: 1px solid #e2e8f0 !important;"
-                                            >
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="registerEmail" class="form-label fw-medium mb-1" style="font-size: 0.9rem;">Email</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0;">
-                                                <i class="bi bi-envelope" style="font-size: 0.9rem;"></i>
-                                            </span>
-                                            <input
-                                                type="email"
-                                                class="form-control border-0 ps-0"
-                                                id="registerEmail"
-                                                v-model="credentials.email"
-                                                required
-                                                style="border-left: 1px solid #e2e8f0 !important;"
-                                            >
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="registerPassword" class="form-label fw-medium mb-1" style="font-size: 0.9rem;">Password</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0;">
-                                                <i class="bi bi-lock" style="font-size: 0.9rem;"></i>
-                                            </span>
-                                            <input
-                                                type="password"
-                                                class="form-control border-0 ps-0"
-                                                id="registerPassword"
-                                                v-model="credentials.password"
-                                                required
-                                                minlength="6"
-                                                style="border-left: 1px solid #e2e8f0 !important;"
-                                            >
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="confirmPassword" class="form-label fw-medium mb-1" style="font-size: 0.9rem;">Confirm Password</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text" style="background: #f8f9fa; border: 1px solid #e2e8f0;">
-                                                <i class="bi bi-shield-lock" style="font-size: 0.9rem;"></i>
-                                            </span>
-                                            <input
-                                                type="password"
-                                                class="form-control border-0 ps-0"
-                                                id="confirmPassword"
-                                                v-model="credentials.confirmPassword"
-                                                required
-                                                minlength="6"
-                                                style="border-left: 1px solid #e2e8f0 !important;"
-                                            >
-                                        </div>
-                                    </div>
-                                    <div class="d-grid mb-3">
-                                        <button type="submit" class="btn" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border: none; color: white; padding: 10px 0; font-weight: 500; transition: all 0.3s ease; font-size: 0.95rem;">
-                                            Create Account
-                                        </button>
-                                    </div>
-                                </form>
-                                <div class="text-center">
-                                    <p class="mb-0 text-muted" style="font-size: 0.85rem;">Already have an account?
-                                        <a href="#" @click="$emit('navigate-to-login')" class="fw-bold" style="color: #f093fb; text-decoration: none; font-size: 0.85rem;">Sign in</a>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `,
+    mounted() {
+        this.$refs.usernameInput?.focus();
+    },
     methods: {
-        submitForm() {
-            // Basic validation
-            if (!this.credentials.username || !this.credentials.email || !this.credentials.password || !this.credentials.confirmPassword) {
-                alert('Please fill in all fields');
-                return;
+        validate() {
+            const errors = {};
+            if (!this.credentials.username.trim()) errors.username = 'Username is required';
+            if (!this.credentials.email.trim()) {
+                errors.email = 'Email is required';
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.credentials.email)) {
+                errors.email = 'Please enter a valid email';
             }
-
+            if (!this.credentials.password) {
+                errors.password = 'Password is required';
+            } else if (this.credentials.password.length < 6) {
+                errors.password = 'Password must be at least 6 characters';
+            }
             if (this.credentials.password !== this.credentials.confirmPassword) {
-                alert('Passwords do not match');
-                return;
+                errors.confirmPassword = 'Passwords do not match';
             }
-
-            if (this.credentials.password.length < 6) {
-                alert('Password must be at least 6 characters');
-                return;
-            }
-
+            this.errors = errors;
+            return Object.keys(errors).length === 0;
+        },
+        submitForm() {
+            if (!this.validate()) return;
+            this.isLoading = true;
             this.$emit('register', {
                 username: this.credentials.username,
                 email: this.credentials.email,
                 password: this.credentials.password
             });
+        },
+        resetLoading() {
+            this.isLoading = false;
         }
-    }
+    },
+    template: `
+        <div class="auth-page">
+            <div class="auth-card">
+                <div class="text-center">
+                    <div class="auth-logo" style="background-color: var(--color-secondary);">
+                        <i class="bi bi-person-plus" aria-hidden="true"></i>
+                    </div>
+                    <h2 class="h3 fw-bold mb-1" style="color: var(--color-foreground);">Create Account</h2>
+                    <p class="text-muted-custom mb-4">Join Phonebook Pro today</p>
+                </div>
+                <form @submit.prevent="submitForm" novalidate>
+                    <div class="mb-3">
+                        <label for="registerUsername" class="input-label">Username</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-person input-icon" aria-hidden="true"></i>
+                            <input
+                                ref="usernameInput"
+                                type="text"
+                                id="registerUsername"
+                                v-model="credentials.username"
+                                class="input-custom"
+                                :class="{ error: errors.username }"
+                                autocomplete="username"
+                                minlength="3"
+                                :aria-invalid="!!errors.username"
+                                :aria-describedby="errors.username ? 'registerUsername-error' : null"
+                            >
+                        </div>
+                        <div v-if="errors.username" id="registerUsername-error" class="input-error" role="alert">{{ errors.username }}</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="registerEmail" class="input-label">Email</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-envelope input-icon" aria-hidden="true"></i>
+                            <input
+                                type="email"
+                                id="registerEmail"
+                                v-model="credentials.email"
+                                class="input-custom"
+                                :class="{ error: errors.email }"
+                                autocomplete="email"
+                                :aria-invalid="!!errors.email"
+                                :aria-describedby="errors.email ? 'registerEmail-error' : null"
+                            >
+                        </div>
+                        <div v-if="errors.email" id="registerEmail-error" class="input-error" role="alert">{{ errors.email }}</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="registerPassword" class="input-label">Password</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-lock input-icon" aria-hidden="true"></i>
+                            <input
+                                type="password"
+                                id="registerPassword"
+                                v-model="credentials.password"
+                                class="input-custom"
+                                :class="{ error: errors.password }"
+                                autocomplete="new-password"
+                                minlength="6"
+                                :aria-invalid="!!errors.password"
+                                :aria-describedby="errors.password ? 'registerPassword-error' : null"
+                            >
+                        </div>
+                        <div v-if="errors.password" id="registerPassword-error" class="input-error" role="alert">{{ errors.password }}</div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="confirmPassword" class="input-label">Confirm Password</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-shield-lock input-icon" aria-hidden="true"></i>
+                            <input
+                                type="password"
+                                id="confirmPassword"
+                                v-model="credentials.confirmPassword"
+                                class="input-custom"
+                                :class="{ error: errors.confirmPassword }"
+                                autocomplete="new-password"
+                                :aria-invalid="!!errors.confirmPassword"
+                                :aria-describedby="errors.confirmPassword ? 'confirmPassword-error' : null"
+                            >
+                        </div>
+                        <div v-if="errors.confirmPassword" id="confirmPassword-error" class="input-error" role="alert">{{ errors.confirmPassword }}</div>
+                    </div>
+                    <button type="submit" class="btn-custom btn-primary-custom w-100" :disabled="isLoading">
+                        <span v-if="isLoading" class="spinner me-2"></span>
+                        {{ isLoading ? 'Creating account...' : 'Create Account' }}
+                    </button>
+                </form>
+                <div class="text-center mt-4">
+                    <p class="mb-0 text-muted-custom" style="font-size: 0.9rem;">
+                        Already have an account?
+                        <a href="#" @click.prevent="$emit('navigate-to-login')" class="fw-bold">Sign in</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    `
 };
 
+// --------------------------------------------------------
 // Main App
+// --------------------------------------------------------
 const App = {
     data() {
         return {
-            currentView: 'contact-list', // Default view
+            currentView: 'contact-list',
             currentUser: { authenticated: false, username: null },
             searchTerm: '',
             contacts: [],
             selectedContact: null,
-            apiUrl: '/api',
-            token: localStorage.getItem('token') || null
+            apiUrl: window.location.port === '8080' ? 'http://localhost:8000' : '/api',
+            token: localStorage.getItem('token') || null,
+            isMobileMenuOpen: false,
+            isSearchLoading: false
         };
     },
     mounted() {
-        // Check if user is logged in
         if (this.token) {
-            // Verify token and get user info
             this.verifyToken();
         } else {
-            // Redirect to login if not authenticated
             this.currentView = 'login';
         }
     },
     created() {
-        // Initialize debounced search
-        this.debouncedSearch = this.debounce(this.searchContacts, 300);
+        this.debouncedSearch = this.debounce(this.performSearch, 300);
+    },
+    computed: {
+        isAuthenticated() {
+            return !!this.token;
+        }
     },
     methods: {
+        // Toast proxy
+        showToast(message, type = 'info', duration = 4000) {
+            this.$refs.toastContainer?.addToast(message, type, duration);
+        },
+
         debounce(func, wait) {
             let timeout;
             return function executedFunction(...args) {
@@ -777,38 +915,29 @@ const App = {
                 timeout = setTimeout(later, wait);
             };
         },
+
         async verifyToken() {
             try {
-                // Extract username from token (JWT) or use a fallback method
                 if (this.token) {
-                    // If we stored the username in localStorage with the token, we can retrieve it
-                    // For now, we'll use a fallback approach
-                    // We could implement a /me endpoint in the backend to get user info
-                    const response = await axios.get(`${this.apiUrl}/contacts`, {
+                    await axios.get(`${this.apiUrl}/contacts`, {
                         headers: { Authorization: `Bearer ${this.token}` }
                     });
-
-                    // Since we don't have a specific endpoint to get user info,
-                    // we'll assume the user is valid and try to get the username from localStorage
-                    let storedUsername = localStorage.getItem('username') || 'User';
+                    const storedUsername = localStorage.getItem('username') || 'User';
                     this.currentUser = { authenticated: true, username: storedUsername };
                 }
             } catch (error) {
-                // Check if it's a network error (backend not running) or authentication error
                 if (error.response && error.response.status === 401) {
-                    // Token is invalid, redirect to login
                     this.logout();
                 } else {
-                    // Network error (backend not running), could inform user
-                    console.log('Backend not reachable, token validation pending until backend is available');
-                    let storedUsername = localStorage.getItem('username') || 'User';
-                    this.currentUser = { authenticated: true, username: storedUsername }; // Assume valid until backend is reachable
-                    this.currentView = 'contact-list'; // Allow navigation but show error state
+                    console.warn('Backend not reachable; token validation pending.');
+                    const storedUsername = localStorage.getItem('username') || 'User';
+                    this.currentUser = { authenticated: true, username: storedUsername };
+                    this.currentView = 'contact-list';
                 }
             }
         },
+
         login(credentials) {
-            // Backend expects JSON format for login
             axios.post(`${this.apiUrl}/login`, {
                 username: credentials.username,
                 password: credentials.password
@@ -816,299 +945,303 @@ const App = {
             .then(response => {
                 this.token = response.data.access_token;
                 localStorage.setItem('token', this.token);
-                localStorage.setItem('username', credentials.username); // Store username in localStorage
+                localStorage.setItem('username', credentials.username);
                 this.currentUser = { authenticated: true, username: credentials.username };
                 this.currentView = 'contact-list';
+                this.showToast('Welcome back, ' + credentials.username + '!', 'success');
             })
             .catch(error => {
-                if (error.response) {
-                    alert('Login failed: ' + error.response.data.detail);
-                } else {
-                    alert('Login failed: Network error - please make sure the backend server is running');
-                }
+                const detail = error.response?.data?.detail || 'Network error — please make sure the backend server is running';
+                this.showToast('Login failed: ' + detail, 'error');
+                this.$nextTick(() => {
+                    this.$refs.loginComponent?.resetLoading();
+                });
             });
         },
+
         register(credentials) {
-            // For register, we should send as JSON since it matches the UserCreate schema
             axios.post(`${this.apiUrl}/register`, {
                 username: credentials.username,
                 email: credentials.email,
                 password: credentials.password
             }, {
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Content-Type': 'application/json' }
             })
             .then(response => {
                 this.token = response.data.access_token;
                 localStorage.setItem('token', this.token);
-                localStorage.setItem('username', credentials.username); // Store username in localStorage
+                localStorage.setItem('username', credentials.username);
                 this.currentUser = { authenticated: true, username: credentials.username };
                 this.currentView = 'contact-list';
+                this.showToast('Account created successfully!', 'success');
             })
             .catch(error => {
-                if (error.response) {
-                    alert('Registration failed: ' + error.response.data.detail);
-                } else {
-                    alert('Registration failed: Network error - please make sure the backend server is running');
-                }
+                const detail = error.response?.data?.detail || 'Network error — please make sure the backend server is running';
+                this.showToast('Registration failed: ' + detail, 'error');
+                this.$nextTick(() => {
+                    this.$refs.registerComponent?.resetLoading();
+                });
             });
         },
+
         logout() {
             this.token = null;
             this.currentUser = { authenticated: false, username: null };
+            this.searchTerm = '';
+            this.contacts = [];
+            this.selectedContact = null;
             localStorage.removeItem('token');
-            localStorage.removeItem('username'); // Remove username from localStorage
+            localStorage.removeItem('username');
             this.currentView = 'login';
+            this.showToast('You have been logged out.', 'info');
         },
+
         navigateTo(view) {
             this.currentView = view;
+            this.isMobileMenuOpen = false;
+            if (view === 'contact-list') {
+                this.selectedContact = null;
+            }
         },
+
         loadContacts() {
-            if (this.token) {
-                axios.get(`${this.apiUrl}/contacts`, {
-                    headers: {
-                        'Authorization': `Bearer ${this.token}`
-                    }
-                })
-                .then(response => {
-                    this.contacts = response.data;
-                })
-                .catch(error => {
-                    if (error.response) {
-                        // Server responded with error status
-                        console.error('Error fetching contacts:', error.response.data);
-                    } else if (error.request) {
-                        // Request made but no response received (backend down)
-                        console.warn('Backend not reachable, showing empty contact list');
-                    } else {
-                        // Something else happened
-                        console.error('Error:', error.message);
-                    }
-                });
-            }
-        },
-        searchContacts() {
-            if (this.token) {
-                if (this.searchTerm) {
-                    // Search with the term
-                    axios.get(`${this.apiUrl}/contacts?search=${this.searchTerm}`, {
-                        headers: {
-                            'Authorization': `Bearer ${this.token}`
-                        }
-                    })
-                    .then(response => {
-                        this.contacts = response.data;
-                    })
-                    .catch(error => {
-                        if (error.response) {
-                            console.error('Error searching contacts:', error.response.data);
-                        } else if (error.request) {
-                            console.warn('Backend not reachable for search');
-                        } else {
-                            console.error('Error:', error.message);
-                        }
-                    });
-                } else {
-                    // If no search term, load all contacts
-                    this.loadContacts();
+            if (!this.token) return;
+            axios.get(`${this.apiUrl}/contacts`, {
+                headers: { Authorization: `Bearer ${this.token}` }
+            })
+            .then(response => {
+                this.contacts = response.data;
+            })
+            .catch(error => {
+                if (error.response) {
+                    console.error('Error fetching contacts:', error.response.data);
+                    this.showToast('Could not load contacts.', 'error');
+                } else if (error.request) {
+                    console.warn('Backend not reachable, showing empty contact list');
+                    this.showToast('Backend not reachable. Please make sure the server is running.', 'error');
                 }
-            }
+            });
         },
+
+        performSearch() {
+            if (!this.token) return;
+            this.isSearchLoading = true;
+            const url = this.searchTerm
+                ? `${this.apiUrl}/contacts?search=${encodeURIComponent(this.searchTerm)}`
+                : `${this.apiUrl}/contacts`;
+
+            axios.get(url, {
+                headers: { Authorization: `Bearer ${this.token}` }
+            })
+            .then(response => {
+                this.contacts = response.data;
+            })
+            .catch(error => {
+                if (error.response) {
+                    console.error('Error searching contacts:', error.response.data);
+                } else if (error.request) {
+                    console.warn('Backend not reachable for search');
+                }
+            })
+            .finally(() => {
+                this.isSearchLoading = false;
+            });
+        },
+
         loadContact(id) {
-            if (this.token) {
-                axios.get(`${this.apiUrl}/contacts/${id}`, {
-                    headers: {
-                        'Authorization': `Bearer ${this.token}`
-                    }
-                })
-                .then(response => {
-                    this.selectedContact = response.data;
-                    this.currentView = 'contact-detail';
-                })
-                .catch(error => {
-                    if (error.response) {
-                        console.error('Error fetching contact:', error.response.data);
-                        alert('Error fetching contact: ' + error.response.data.detail);
-                    } else if (error.request) {
-                        console.warn('Backend not reachable when fetching contact');
-                        alert('Backend not reachable - please make sure the server is running');
-                    } else {
-                        console.error('Error:', error.message);
-                        alert('Error fetching contact');
-                    }
-                });
-            }
+            if (!this.token) return;
+            axios.get(`${this.apiUrl}/contacts/${id}`, {
+                headers: { Authorization: `Bearer ${this.token}` }
+            })
+            .then(response => {
+                this.selectedContact = response.data;
+                this.currentView = 'contact-detail';
+            })
+            .catch(error => {
+                const detail = error.response?.data?.detail || 'Network error — please make sure the backend server is running';
+                this.showToast('Error fetching contact: ' + detail, 'error');
+            });
         },
+
         createContact(contactData) {
-            if (this.token) {
-                axios.post(`${this.apiUrl}/contacts`, contactData, {
-                    headers: {
-                        'Authorization': `Bearer ${this.token}`,
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(response => {
-                    this.contacts.push(response.data);
-                    this.navigateTo('contact-list');
-                })
-                .catch(error => {
-                    if (error.response) {
-                        alert('Error creating contact: ' + error.response.data.detail);
-                    } else {
-                        alert('Error creating contact: Network error - please make sure the backend server is running');
-                    }
-                });
-            }
+            if (!this.token) return;
+            axios.post(`${this.apiUrl}/contacts`, contactData, {
+                headers: {
+                    Authorization: `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                this.contacts.push(response.data);
+                this.navigateTo('contact-list');
+                this.showToast('Contact added successfully!', 'success');
+            })
+            .catch(error => {
+                const detail = error.response?.data?.detail || 'Network error — please make sure the backend server is running';
+                this.showToast('Error creating contact: ' + detail, 'error');
+            });
         },
+
         updateContact(id, contactData) {
-            if (this.token) {
-                axios.put(`${this.apiUrl}/contacts/${id}`, contactData, {
-                    headers: {
-                        'Authorization': `Bearer ${this.token}`,
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(response => {
-                    // Find and update the contact in the local array
-                    const index = this.contacts.findIndex(contact => contact.id === id);
-                    if (index !== -1) {
-                        this.contacts[index] = response.data;
-                    }
-                    this.selectedContact = response.data;
-                    this.navigateTo('contact-list');
-                })
-                .catch(error => {
-                    if (error.response) {
-                        alert('Error updating contact: ' + error.response.data.detail);
-                    } else {
-                        alert('Error updating contact: Network error - please make sure the backend server is running');
-                    }
-                });
-            }
+            if (!this.token) return;
+            axios.put(`${this.apiUrl}/contacts/${id}`, contactData, {
+                headers: {
+                    Authorization: `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                const index = this.contacts.findIndex(contact => contact.id === id);
+                if (index !== -1) {
+                    this.contacts[index] = response.data;
+                }
+                this.selectedContact = response.data;
+                this.navigateTo('contact-list');
+                this.showToast('Contact updated successfully!', 'success');
+            })
+            .catch(error => {
+                const detail = error.response?.data?.detail || 'Network error — please make sure the backend server is running';
+                this.showToast('Error updating contact: ' + detail, 'error');
+            });
         },
+
         deleteContact(id) {
-            if (this.token) {
-                axios.delete(`${this.apiUrl}/contacts/${id}`, {
-                    headers: {
-                        'Authorization': `Bearer ${this.token}`
-                    }
-                })
-                .then(() => {
-                    // Remove the contact from the local array
-                    this.contacts = this.contacts.filter(contact => contact.id !== id);
-                    this.navigateTo('contact-list');
-                })
-                .catch(error => {
-                    if (error.response) {
-                        alert('Error deleting contact: ' + error.response.data.detail);
-                    } else {
-                        alert('Error deleting contact: Network error - please make sure the backend server is running');
-                    }
-                });
-            }
-        }
-    },
-    computed: {
-        isAuthenticated() {
-            return !!this.token;
+            if (!this.token) return;
+            axios.delete(`${this.apiUrl}/contacts/${id}`, {
+                headers: { Authorization: `Bearer ${this.token}` }
+            })
+            .then(() => {
+                this.contacts = this.contacts.filter(contact => contact.id !== id);
+                this.selectedContact = null;
+                this.navigateTo('contact-list');
+                this.showToast('Contact deleted successfully.', 'info');
+            })
+            .catch(error => {
+                const detail = error.response?.data?.detail || 'Network error — please make sure the backend server is running';
+                this.showToast('Error deleting contact: ' + detail, 'error');
+            });
         }
     },
     template: `
-        <div class="app position-relative" style="min-height: 100vh; background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);">
+        <div class="app" style="min-height: 100vh; background-color: var(--color-background); display: flex; flex-direction: column;">
+            <toast-container ref="toastContainer"></toast-container>
+
             <!-- Navigation Bar -->
-            <nav v-if="isAuthenticated" class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.1);">
+            <nav v-if="isAuthenticated" class="app-navbar">
                 <div class="container-fluid px-4">
-                    <a class="navbar-brand d-flex align-items-center" href="#" @click="navigateTo('contact-list')">
-                        <i class="bi bi-people me-2"></i>
-                        <span class="fw-bold">Phonebook Pro</span>
-                    </a>
-                    <div class="navbar-nav ms-auto d-flex align-items-center">
-                        <div class="d-flex align-items-center me-3 text-light">
-                            <i class="bi bi-person-circle me-2"></i>
-                            <span class="d-none d-md-block">Welcome, {{ currentUser && currentUser.username ? currentUser.username : 'User' }}</span>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between">
+                        <a class="navbar-brand-custom" href="#" @click.prevent="navigateTo('contact-list')">
+                            <span class="brand-icon">
+                                <i class="bi bi-people" aria-hidden="true"></i>
+                            </span>
+                            <span>Phonebook Pro</span>
+                        </a>
+
+                        <button
+                            class="btn-custom btn-ghost-custom d-lg-none"
+                            @click="isMobileMenuOpen = !isMobileMenuOpen"
+                            aria-label="Toggle navigation menu"
+                            :aria-expanded="isMobileMenuOpen"
+                        >
+                            <i class="bi" :class="isMobileMenuOpen ? 'bi-x-lg' : 'bi-list'" aria-hidden="true"></i>
+                        </button>
+
+                        <div
+                            class="navbar-actions d-lg-flex"
+                            :class="isMobileMenuOpen ? 'd-flex' : 'd-none d-lg-flex'"
+                        >
+                            <div class="d-flex align-items-center text-muted-custom me-lg-3">
+                                <i class="bi bi-person-circle me-2" aria-hidden="true"></i>
+                                <span class="d-none d-md-inline">Welcome, {{ currentUser && currentUser.username ? currentUser.username : 'User' }}</span>
+                            </div>
+                            <button class="btn-custom btn-primary-custom" @click="navigateTo('create-contact')" aria-label="Add new contact">
+                                <i class="bi bi-person-plus" aria-hidden="true"></i>
+                                Add Contact
+                            </button>
+                            <button class="btn-custom btn-ghost-custom" @click="logout">
+                                <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                                Logout
+                            </button>
                         </div>
-                        <button class="btn btn-light me-2" @click="navigateTo('create-contact')" style="border-radius: 8px; font-weight: 500;">
-                            <i class="bi bi-person-plus me-1"></i> Add Contact
-                        </button>
-                        <button class="btn btn-outline-light" @click="logout" style="border-radius: 8px; font-weight: 500;">
-                            <i class="bi bi-box-arrow-right me-1"></i> Logout
-                        </button>
                     </div>
                 </div>
             </nav>
 
-            <!-- Search Bar (when authenticated) -->
-            <div v-if="isAuthenticated" class="container-fluid px-4 py-3">
+            <!-- Search Bar -->
+            <div v-if="isAuthenticated" class="container-fluid px-4 py-4">
                 <div class="row justify-content-center">
                     <div class="col-xl-6 col-lg-8 col-md-10">
-                        <div class="position-relative">
+                        <div class="input-group-custom">
+                            <i class="bi bi-search input-icon" aria-hidden="true"></i>
                             <input
                                 type="text"
-                                class="form-control form-control-lg ps-5"
+                                class="input-custom"
+                                style="padding-left: 2.75rem; border-radius: var(--radius-full);"
                                 placeholder="Search contacts by name or phone..."
                                 v-model="searchTerm"
                                 @input="debouncedSearch"
-                                style="border-radius: 25px; padding: 15px 20px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.08); transition: all 0.3s ease;"
+                                aria-label="Search contacts"
                             >
-                            <i class="bi bi-search position-absolute" style="left: 25px; top: 50%; transform: translateY(-50%); color: #a0aec0;"></i>
+                            <span v-if="isSearchLoading" class="position-absolute" style="right: 1rem; color: var(--color-placeholder);">
+                                <span class="spinner" style="width: 1rem; height: 1rem; border-top-color: var(--color-primary);"></span>
+                            </span>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Main Content Area -->
-            <div class="container-fluid px-4 flex-grow-1">
+            <main class="container-fluid px-4 flex-grow-1 pb-5">
                 <div class="row justify-content-center">
                     <div class="col-12">
-                        <!-- Contact List View -->
-                        <contact-list
-                            v-if="currentView === 'contact-list' && isAuthenticated"
-                            :contacts="contacts"
-                            @load-contacts="loadContacts"
-                            @view-contact="loadContact"
-                            @add-contact="navigateTo('create-contact')"
-                        />
+                        <transition name="fade" mode="out-in">
+                            <contact-list
+                                v-if="currentView === 'contact-list' && isAuthenticated"
+                                :contacts="contacts"
+                                @load-contacts="loadContacts"
+                                @view-contact="loadContact"
+                                @add-contact="navigateTo('create-contact')"
+                            />
+                        </transition>
 
-                        <!-- Contact Detail View -->
-                        <contact-detail
-                            v-if="currentView === 'contact-detail' && isAuthenticated"
-                            :contact="selectedContact"
-                            @update-contact="updateContact"
-                            @delete-contact="deleteContact"
-                            @back-to-list="navigateTo('contact-list')"
-                        />
+                        <transition name="fade" mode="out-in">
+                            <contact-detail
+                                v-if="currentView === 'contact-detail' && isAuthenticated"
+                                :contact="selectedContact"
+                                @update-contact="updateContact"
+                                @delete-contact="deleteContact"
+                                @back-to-list="navigateTo('contact-list')"
+                            />
+                        </transition>
 
-                        <!-- Create Contact View -->
-                        <create-contact
-                            v-if="currentView === 'create-contact' && isAuthenticated"
-                            @create-contact="createContact"
-                            @cancel="navigateTo('contact-list')"
-                        />
+                        <transition name="fade" mode="out-in">
+                            <create-contact
+                                v-if="currentView === 'create-contact' && isAuthenticated"
+                                @create-contact="createContact"
+                                @cancel="navigateTo('contact-list')"
+                            />
+                        </transition>
 
-                        <!-- Login View -->
-                        <login
-                            v-if="currentView === 'login'"
-                            @login="login"
-                            @navigate-to-register="navigateTo('register')"
-                        />
+                        <transition name="fade" mode="out-in">
+                            <login
+                                ref="loginComponent"
+                                v-if="currentView === 'login'"
+                                @login="login"
+                                @navigate-to-register="navigateTo('register')"
+                            />
+                        </transition>
 
-                        <!-- Register View -->
-                        <register
-                            v-if="currentView === 'register'"
-                            @register="register"
-                            @navigate-to-login="navigateTo('login')"
-                        />
+                        <transition name="fade" mode="out-in">
+                            <register
+                                ref="registerComponent"
+                                v-if="currentView === 'register'"
+                                @register="register"
+                                @navigate-to-login="navigateTo('login')"
+                            />
+                        </transition>
                     </div>
                 </div>
-            </div>
-
-            <!-- Footer -->
-            <footer v-if="isAuthenticated" class="footer py-3 text-center mt-auto" style="background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%); color: white; position: absolute; bottom: 0; width: 100%;">
-                <div class="container-fluid px-4">
-                    <!-- Removed copyright text to prevent blocking pagination -->
-                </div>
-            </footer>
+            </main>
         </div>
     `
 };
@@ -1117,6 +1250,7 @@ const App = {
 const app = createApp(App);
 
 // Register components
+app.component('toast-container', ToastContainer);
 app.component('contact-list', ContactList);
 app.component('contact-detail', ContactDetail);
 app.component('create-contact', CreateContact);

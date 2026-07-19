@@ -9,7 +9,7 @@ test('create 100 contacts', async ({ page }) => {
 
   for (let i = 1; i <= 100; i++) {
 
-    await page.getByRole('button', { name: ' Add Contact' }).click();
+    await page.getByRole('button', { name: 'Add new contact' }).click();
 
     await page.getByRole('textbox', { name: 'Full Name *' })
       .fill(`User ${i}`);
@@ -23,7 +23,7 @@ test('create 100 contacts', async ({ page }) => {
     await page.getByRole('textbox', { name: 'Address', exact: true })
       .fill(`Address ${i}`);
 
-    await page.getByRole('button', { name: ' Add Contact' }).click();
+    await page.getByRole('button', { name: 'Add Contact' }).click();
 
     console.log(`Created contact ${i}`);
   }

@@ -1,6 +1,8 @@
-# Phonebook Application
+# Phonebook Pro
 
-A full-stack phonebook application with user authentication, built with FastAPI (Python) and Vue.js.
+A full-stack phonebook application with user authentication, built with FastAPI (Python) and Vue.js. Uses **SQLite** for storage — no external database server required.
+
+**Live Demo:** [https://phone-book-yrap.vercel.app/](https://phone-book-yrap.vercel.app/)
 
 ## Features
 
@@ -8,11 +10,69 @@ A full-stack phonebook application with user authentication, built with FastAPI 
 - Add, view, update, and delete contacts
 - Search functionality
 - Secure password storage
-- Responsive UI
+- Responsive UI with modern flat design
+- Toast notifications, inline validation, and loading states
+- Accessible forms and keyboard navigation
+
+## Quick Start (Local)
+
+### Prerequisites
+
+- Python 3.12+ (recommended; Python 3.14 may cause build issues with pinned dependencies)
+- A modern web browser (for the frontend)
+
+### Backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+The API starts at `http://localhost:8000`. On first run, SQLAlchemy creates `phonebook.db` automatically.
+
+### Frontend
+
+Open `frontend/index.html` in a browser, or serve it with any static file server:
+
+```bash
+cd frontend
+# Example with Python:
+python -m http.server 8080
+```
+
+Then open `http://localhost:8080`.
+
+That's it — no PostgreSQL or Docker required for local development.
+
+---
+
+## Deployed Application
+
+The app is deployed on **Vercel** (frontend) and **Render** (backend).
+
+| Service | URL |
+|---|---|
+| Frontend | [https://phone-book-yrap.vercel.app/](https://phone-book-yrap.vercel.app/) |
+| Backend API | [https://phonebook-st8l.onrender.com](https://phonebook-st8l.onrender.com) |
+| API Docs | [https://phonebook-st8l.onrender.com/docs](https://phonebook-st8l.onrender.com/docs) |
+
+Frontend `/api/*` requests are rewritten to the Render backend via `frontend/vercel.json`.
+
+### Deploy on Vercel + Render
+
+See [DEPLOY.md](DEPLOY.md) for the full step-by-step deployment guide.
+
+Quick overview:
+
+1. Deploy the backend on Render using `render.yaml`.
+2. Copy the Render backend URL.
+3. Replace `YOUR-RENDER-BACKEND.onrender.com` in `frontend/vercel.json` with your Render URL.
+4. Deploy the frontend on Vercel with root directory `frontend`, framework preset `Other`, empty build command, and output directory `.`.
+
+---
 
 ## Docker Deployment
-
-The application can be easily deployed using Docker and Docker Compose.
 
 ### Prerequisites
 
@@ -21,74 +81,46 @@ The application can be easily deployed using Docker and Docker Compose.
 
 ### Quick Start with Docker
 
-1. **Clone or copy the repository**
-
-2. **Navigate to the project directory**
+1. **Navigate to the project directory**
    ```bash
-   cd phonebook_app
+   cd PhoneBook
    ```
 
-3. **Build and start the services**
+2. **Build and start the services**
    ```bash
    docker-compose up -d
    ```
 
-4. **Access the application**
+3. **Access the application**
    - Frontend: `http://localhost` (or `http://localhost:80`)
    - Backend API: `http://localhost:8000`
-   - Database: `http://localhost:5432`
+   - API docs: `http://localhost:8000/docs`
 
 ### Docker Services
 
-The application consists of the following services:
+- **frontend**: Nginx serving the Vue.js frontend
+- **backend**: FastAPI application with an embedded SQLite database
 
-- **frontend**: Nginx server serving the Vue.js frontend
-- **backend**: FastAPI application server 
-- **db**: PostgreSQL database
-
-### Docker Configuration
-
-#### Backend Service (FastAPI)
-- Built from Python 3.11-slim
-- Runs on port 8000
-- Environment variables configured in docker-compose.yml
-
-#### Frontend Service (Vue.js + Nginx)
-- Built with Node.js
-- Served by Nginx on port 80
-- Proxies API requests to the backend
-
-#### Database Service (PostgreSQL)
-- PostgreSQL 15-alpine image
-- Persistent data storage using volumes
-- Preconfigured database, user, and password
+The SQLite database file is stored in a Docker volume (`sqlite_data`) so data persists across container restarts.
 
 ### Environment Variables
 
-The following environment variables can be configured in `docker-compose.yml`:
+Configured in `docker-compose.yml` (and optionally `backend/.env` for local runs):
 
-- `DATABASE_URL`: Connection string for PostgreSQL
-- `SECRET_KEY`: Secret key for JWT tokens
-- `ALGORITHM`: JWT algorithm (default: HS256)
-- `ACCESS_TOKEN_EXPIRE_MINUTES`: Token expiration time
-
-### Customization
-
-To customize the application:
-
-1. **Environment Variables**: Modify the environment variables in `docker-compose.yml`
-2. **Database**: Update credentials in both `docker-compose.yml` and `.env` (for local development)
-3. **Ports**: Change exposed ports in `docker-compose.yml` if needed
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | SQLAlchemy connection URL | `sqlite:///./phonebook.db` |
+| `SECRET_KEY` | Secret key for JWT tokens | (change in production) |
+| `ALGORITHM` | JWT algorithm | `HS256` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Token expiration time | `30` |
 
 ### Building Images Manually
-
-To build the images manually:
 
 ```bash
 # Build backend
 docker build -f Dockerfile -t phonebook-backend .
 
-# Build frontend  
+# Build frontend
 docker build -f Dockerfile.frontend -t phonebook-frontend .
 ```
 
@@ -104,66 +136,32 @@ docker-compose logs -f
 # Stop all services
 docker-compose down
 
-# Stop and remove volumes
+# Stop and remove the SQLite volume (deletes all data)
 docker-compose down -v
-```
-
-### Development with Docker
-
-For local development:
-
-```bash
-# Start database only
-docker-compose up -d db
-
-# Run backend locally (with database in Docker)
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload
 ```
 
 ### Production Considerations
 
-For production deployment, consider:
-
-1. **Secrets Management**: Use Docker secrets or external secrets management
+1. **Secrets Management**: Set a strong `SECRET_KEY` via environment variables or secrets
 2. **SSL/TLS**: Add SSL certificates for HTTPS
 3. **Reverse Proxy**: Use a dedicated reverse proxy like Traefik or Nginx
-4. **Monitoring**: Add monitoring and logging solutions
-5. **Backup**: Set up database backup procedures
-6. **Security**: Regular security updates and vulnerability scans
+4. **Backups**: Periodically copy the SQLite database file
+5. **Security**: Regular security updates and vulnerability scans
 
 ### Troubleshooting
 
-1. **Database Connection Issues**: Ensure the database service is running and accessible
-2. **Frontend-Backend Communication**: Check the nginx configuration for proper API proxying
-3. **Port Conflicts**: Verify that required ports are not used by other applications
+1. **Database Issues**: Ensure the process can write to the path in `DATABASE_URL` (the directory must exist and is writable)
+2. **Frontend-Backend Communication**: Check the nginx configuration or Vercel rewrites for proper API proxying
+3. **Port Conflicts**: Verify that ports 80 and 8000 are free
+4. **Render Build Failures**: Pin Python to 3.12.x using `backend/.python-version` to avoid issues with Python 3.14
 
 ## Tech Stack
 
-- **Backend**: Python, FastAPI, PostgreSQL, SQLAlchemy
-- **Frontend**: Vue.js 3, Bootstrap 5, Axios
+- **Backend**: Python, FastAPI, SQLite, SQLAlchemy
+- **Frontend**: Vue.js 3, Bootstrap 5, Axios, Plus Jakarta Sans
 - **Authentication**: JWT tokens
 - **Containerization**: Docker, Docker Compose
-
-## Manual Local Setup (Alternative)
-
-If you prefer to run locally without Docker:
-
-### Backend Setup
-
-1. Make sure you have Python 3.8+ installed
-2. Install PostgreSQL and create a database named "phonebook"
-3. Navigate to the `backend` directory
-4. Install dependencies: `pip install -r requirements.txt`
-5. Set up environment variables in `.env` file
-6. Run the application: `uvicorn main:app --reload`
-
-### Frontend Setup
-
-1. Navigate to the `frontend` directory
-2. Install dependencies: `npm install` (if using npm) or use the HTML directly
-3. Open `index.html` in a browser or serve with a local server
+- **Deployment**: Vercel (frontend), Render (backend)
 
 ## API Endpoints
 
@@ -180,40 +178,54 @@ If you prefer to run locally without Docker:
 
 ## Environment Variables
 
-Create a `.env` file in the backend directory:
+Create a `.env` file in the backend directory (a default is already provided):
 
 ```
-DATABASE_URL=postgresql://username:password@localhost/phonebook
+DATABASE_URL=sqlite:///./phonebook.db
 SECRET_KEY=your-super-secret-key-change-this-in-production
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
+For production, generate a strong secret key, e.g.:
+
+```bash
+openssl rand -hex 32
+```
+
 ## Project Structure
 
 ```
-phonebook_app/
+PhoneBook/
 ├── backend/
 │   ├── main.py           # Main FastAPI application
 │   ├── models.py         # Database models
 │   ├── schemas.py        # Pydantic schemas
-│   ├── database.py       # Database configuration
+│   ├── database.py       # Database configuration (SQLite)
 │   ├── utils.py          # Utility functions
 │   ├── requirements.txt  # Python dependencies
-│   └── .env             # Environment variables
+│   ├── .python-version   # Python version for Render
+│   ├── phonebook.db      # SQLite database (created on first run)
+│   └── .env              # Environment variables
 ├── frontend/
 │   ├── index.html        # Main HTML file
+│   ├── vercel.json       # Vercel rewrite config
 │   ├── src/
-│   │   ├── main.js       # Main Vue app entry
-│   │   └── components/   # Vue components
+│   │   └── main.js       # Main Vue app entry
 │   └── package.json      # Frontend dependencies
+├── design-system/
+│   └── phonebook-pro/
+│       └── MASTER.md     # UI/UX design system
 ├── nginx/
 │   └── nginx.conf        # Nginx configuration
+├── tests/
+│   └── createContacts.spec.ts  # Playwright e2e test
 ├── docker-compose.yml    # Docker Compose configuration
 ├── Dockerfile            # Backend Dockerfile
 ├── Dockerfile.frontend   # Frontend Dockerfile
-├── init.sql              # Database initialization
-├── .dockerignore         # Docker ignore file
+├── database_schema.sql   # Reference SQLite schema
+├── render.yaml           # Render blueprint
+├── DEPLOY.md             # Deployment guide
 └── README.md             # This file
 ```
 
@@ -224,3 +236,17 @@ phonebook_app/
 - Input validation on both frontend and backend
 - SQL injection prevention through ORM
 - Docker containers run as non-root users
+
+## Testing
+
+Run the Playwright e2e test (requires Playwright and the app running locally):
+
+```bash
+npx playwright test tests/createContacts.spec.ts
+```
+
+The test creates 100 contacts and verifies the full CRUD flow.
+
+## License
+
+MIT
